@@ -1,0 +1,179 @@
+Core = maximum parallel execution units.
+
+Threads/Processes = runnable tasks.
+
+"If tasks > cores → the OS scheduler divides CPU time into small slices and runs tasks in rotation."
+
+If threads > cores -> expect time slicing.
+ 
+The OS scheduler handles it. Typically, a round-robin or priority-based scheduling algorithm is used.
+
+The time slice, or quantum, is not fixed universally. It depends on the OS scheduler, thread priority, and system load
+
+eg: 100 Threads on 4 Cores
+You spawn 100 threads (say in Java).
+The OS scheduler sees 100 runnable tasks but only 4 hardware slots (cores).
+At any given instant -> 4 threads run in parallel (1 per core).
+The other 96 wait in the ready queue.
+
+
+How the OS handles it
+The OS uses time slicing + context switching:
+A thread runs on a core for a short time slice (say 10 ms).
+Then the OS swaps it out (saves its registers, program counter, stack pointer).
+Another waiting thread is swapped in on that core.
+This cycle repeats so fast that it feels like all 100 threads are "running simultaneously."
+
+Why specifically Threads and not processes ?
+Threads share memory space, making communication between them faster compared to processes.
+This ensures smooth and responsive performance without unnecessary duplication of resources.
+
+Q) What is a native method?
+eg: private native void start0();
+public synchronized void start() {
+// Native call handled by JVM/OS
+// Creates a new OS thread, then inside that thread:
+// it calls this.run()
+}
+
+
+A native method in Java is a method whose implementation is not in Java - it's implemented in platform-specific code (usually C or C++).
+Declared with the native keyword.
+
+Q) How start() calls run()
+Thread.start() is a native method.
+When you call t.start(), the JVM:
+Allocates a new OS thread.
+Sets up internal thread structures.
+Then internally calls your thread's run() method in that new thread context.
+You don't see this call in Java code - it's handled inside the JVM / native code.
+Java call -> native start() -> JVM -> new thread -> run().
+
+Q) Checked Exceptions
+Checked exceptions are the exceptions that are checked at compile-time.
+The compiler verifies that the code handles these exceptions either by catching them or declaring them in the method signature using the throws keyword.
+Examples of checked exceptions include:
+IOException: An exception is thrown when an input/output operation fails.
+ClassNotFoundException: It is thrown when an application tries to load a class but the class cannot be found.
+
+compiler will complain before running if you don’t handle or declare the exception.
+Compile time: Compiler says “Class.forName() may throw ClassNotFoundException”.
+→ So it forces you to either try/catch or throws.
+
+Q) Unchecked Exceptions (Runtime Exceptions)
+Unchecked exceptions, also known as runtime exceptions, are not checked at compile-time.
+These exceptions usually occur due to programming errors.
+They do not need to be declared in the method signature.
+Examples of unchecked exceptions include:
+NullPointerException: Thrown when trying to access a null object reference.
+ArrayIndexOutOfBoundsException: Occurs when accessing an array element with an invalid index.
+ArithmeticException: Thrown for arithmetic errors like division by zero.
+
+Q) If you extend Thread vs. implement Runnable
+If you extend Thread -> your object is-a thread, so .start() works directly. Each task requires a new thread instance.
+If you implement Runnable -> your object is just a task, so you need to give it to a Thread (or Executor) to run.
+
+text
+class MyTask implements Runnable {
+    @Override
+    public void run() {
+        System.out.println("Doing work...");
+    }
+}
+
+Runnable task = new MyTask();     // this is only the job
+Thread worker = new Thread(task); // give the job to a worker
+worker.start();                   // worker runs the job
+
+run() cannot declare checked exceptions in signature.
+You must handle checked exceptions inside run().
+Unchecked exceptions (RuntimeException) are allowed, but crash the thread.
+
+Checked exceptions in Java are tied to method signatures. Thread.start() only knows it will call run() - it has no idea what exceptions the task may throw.
+That's why Runnable.run() doesn't allow checked exceptions.
+For cases where exceptions matter, use Callable, which supports checked exceptions and works with Future.
+
+Checked exceptions enforce compile-time handling of recoverable errors.
+
+Case                 run() mandatory? Reason
+extends Thread       No               Thread already has a run() method. You only override it.
+implements Runnable  Yes              Runnable is an interface. Abstract method must be implemented.
+Whenever we implement thread there is parent child relationship.
+thread1 will be child of main thread which is parent.
+There is no order of execution. It's up to the JVM.
+Main thread is also a user thread.
+
+
+Daemon thread has no significance; it's meant to serve the main thread.
+Whenever the main thread dies the daemon thread also dies.
+If JVM finds no user thread running then it will not allow daemon thread to continue.
+The program runs until all user threads finish.
+
+Case 1: notify()
+Suppose 5 threads are waiting on shared.wait().
+You call shared.notify().
+Exactly 1 of them (chosen by JVM) will be moved from WAITING -> BLOCKED.
+
+Why BLOCKED, not immediately RUNNABLE?
+Because the awakened thread still needs to reacquire the monitor lock (synchronized) on shared.
+
+Sequence:
+    1. Caller thread does notify() (inside synchronized).
+    2. One waiting thread is picked -> moves to BLOCKED (waiting for the lock).
+    3. When the caller releases the lock (exits synchronized block), the awakened thread can acquire it.
+    4. Once it has the lock -> it continues execution after the wait().
+
+
+Case 2: notifyAll()
+All 5 waiting threads are awakened -> all go from WAITING -> BLOCKED.
+Only one thread at a time can get the lock.
+The others remain BLOCKED until the lock is released again.
+Execution order depends on the JVM scheduler you cannot predict which awakened thread will get the lock next.    
+    
+
+When a thread enters a synchronized method/block, it automatically acquires the lock of the object (or class, or custom object) used as the monitor. It’s not the method that’s locked, but the monitor associated with that object.
+
+Same object instance → synchronized methods block each other.
+Different object instances → synchronized methods don’t interfere.
+
+A thread enters the WAITING state when it is indefinitely waiting for another thread to perform a specific action before it can proceed. 
+
+try { 
+    Thread.sleep(1000); // Thread enters TIMED_WAITING state for 1 second 
+} catch (InterruptedException e) { 
+    Thread.currentThread().interrupt(); 
+}
+
+
+Each Thread object represents exactly one OS thread. Once that thread dies, the object can’t be reused.
+
+Object.wait() -> Can only be called inside a synchronized block/method.
+
+🔹 How tasks in ExecutorService get interrupted
+
+shutdown()
+
+No interrupts. Just prevents new tasks from being accepted.
+Running tasks continue until they finish.
+
+shutdownNow()
+
+Calls interrupt() on all worker threads.
+Running tasks get an interrupt signal.
+Queued tasks (not yet started) are removed and returned as a list.
+
+So yes → Java executors use interrupts when you call shutdownNow().
+
+
+
+Thread Pool Executor working::
+
+When a task is submitted:
+1. Are current threads < corePoolSize?
+   ✅ Yes → Create new thread immediately (ignore queue)
+   
+2. No (core threads all busy) → Try to add to queue
+   ✅ If queue has space → Task goes to queue
+   ❌ If queue is FULL → Create new thread (up to maxPoolSize)
+   
+3. If queue full AND threads >= maxPoolSize → Reject task
