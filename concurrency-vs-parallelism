@@ -1,19 +1,63 @@
-Concurrency deals with managing multiple tasks making progress together, while parallelism is about executing multiple tasks simultaneously. All parallel systems are concurrent, but concurrent systems may not be parallel if they're time-slicing on a single processor
+==================================================
+Concurrency vs Parallelism Notes
+==================================================
 
+--------------------------------------------------
+1. Core Concepts
+--------------------------------------------------
+Concurrency: Managing multiple tasks making progress together (may share a thread through scheduling).
+Parallelism: Executing multiple tasks simultaneously (tasks run at the same instant on multiple threads or cores).
+All parallel systems are concurrent, but concurrent systems may not be parallel if they're time-slicing on a single processor.
 
-“Concurrency means tasks make progress together — they may share a thread through scheduling.
-Parallelism means tasks run at the same instant on multiple threads or cores.
-In Java, CompletableFuture.runAsync() demonstrates concurrency; using a fixed thread pool with multiple threads gives you parallelism
-
+--------------------------------------------------
+2. Java Example
+--------------------------------------------------
+Concurrency:
 ExecutorService single = Executors.newSingleThreadExecutor();
 CompletableFuture.runAsync(() -> task("A"), single);
 CompletableFuture.runAsync(() -> task("B"), single);
 
+Parallelism:
 ExecutorService pool = Executors.newFixedThreadPool(2);
 CompletableFuture.runAsync(() -> task("A"), pool);
 CompletableFuture.runAsync(() -> task("B"), pool);
 
+--------------------------------------------------
+3. CompletableFuture.allOf()
+--------------------------------------------------
+allOf() returns Void because it coordinates multiple futures that may have different return types. It acts as a completion signal rather than a result container. You can still access individual results from each future after allOf().join() completes.
+Void = "I'm done watching, all are complete"
 
-"allOf() returns Void because it coordinates multiple futures that may have different return types. It acts as a completion signal rather than a result container. You can still access individual results from each future after allOf().join() completes."
+--------------------------------------------------
+4. Optimal Thread Pool Size (I/O-bound)
+--------------------------------------------------
+based on cores and DB latency
+Standard heuristic for estimating optimal thread pool size for I/O-bound operations (like DB calls):
 
-Void = "I'm done watching, all are complete" ✅
+Formula (from Brian Goetz’s Java Concurrency in Practice):
+Optimal Threads = Cores × (1 + W/C)
+Where:
+Cores = number of CPU cores available
+W/C = ratio of wait time to compute time per task
+
+--------------------------------------------------
+5. Example: Database Queries
+--------------------------------------------------
+You have 4 cores
+Each DB query takes 200 ms total
+
+
+Spends 180 ms waiting for DB response (I/O)
+Spends 20 ms doing CPU work (processing results)
+
+W/C = 180/20 = 9
+Optimal Threads = 4 × (1 + 9) = 40
+
+Roughly 40 threads give good throughput — because most threads are waiting on I/O.
+
+--------------------------------------------------
+6. Intuition
+--------------------------------------------------
+If tasks are CPU-heavy, W/C ≈ 0 → threads ≈ cores.
+If tasks are I/O-heavy, W/C is large → you can safely run more threads.
+But you’ll still need to cap threads to avoid memory and context-switch overhead.
