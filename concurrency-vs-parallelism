@@ -1,0 +1,19 @@
+Concurrency deals with managing multiple tasks making progress together, while parallelism is about executing multiple tasks simultaneously. All parallel systems are concurrent, but concurrent systems may not be parallel if they're time-slicing on a single processor
+
+
+“Concurrency means tasks make progress together — they may share a thread through scheduling.
+Parallelism means tasks run at the same instant on multiple threads or cores.
+In Java, CompletableFuture.runAsync() demonstrates concurrency; using a fixed thread pool with multiple threads gives you parallelism
+
+ExecutorService single = Executors.newSingleThreadExecutor();
+CompletableFuture.runAsync(() -> task("A"), single);
+CompletableFuture.runAsync(() -> task("B"), single);
+
+ExecutorService pool = Executors.newFixedThreadPool(2);
+CompletableFuture.runAsync(() -> task("A"), pool);
+CompletableFuture.runAsync(() -> task("B"), pool);
+
+
+"allOf() returns Void because it coordinates multiple futures that may have different return types. It acts as a completion signal rather than a result container. You can still access individual results from each future after allOf().join() completes."
+
+Void = "I'm done watching, all are complete" ✅

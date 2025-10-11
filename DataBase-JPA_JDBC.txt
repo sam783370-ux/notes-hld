@@ -1,0 +1,219 @@
+JPA & Hibernate Interview Notes
+1. Core Concept - Why JPA?
+Problem: Object-Relational Impedance Mismatch
+
+Java: Objects, Inheritance, References
+
+Database: Tables, Rows, Foreign Keys
+
+Solution: JPA bridges this gap
+
+java
+// You work with objects
+@Entity
+public class User {
+    @Id
+    private Long id;
+    @OneToMany
+    private List<Order> orders;
+}
+// JPA handles SQL generation
+
+
+
+2. JDBC vs JPA Relationship
+
+==================================================
+JPA & Hibernate Interview Notes
+==================================================
+
+--------------------------------------------------
+1. Core Concept: Why JPA?
+--------------------------------------------------
+- **Problem:** Object-Relational Impedance Mismatch
+    - Java: Objects, Inheritance, References
+    - Database: Tables, Rows, Foreign Keys
+- **Solution:** JPA bridges this gap
+
+```java
+// You work with objects
+@Entity
+public class User {
+    @Id
+    private Long id;
+    @OneToMany
+    private List<Order> orders;
+}
+// JPA handles SQL generation
+```
+
+--------------------------------------------------
+2. JDBC vs JPA Relationship
+--------------------------------------------------
+- **Flow:** Your App → JPA → JDBC API → JDBC Driver → Database
+- **JDBC:** Low-level API (manual SQL)
+    ```java
+    String sql = "INSERT INTO user VALUES (?,?)";
+    PreparedStatement stmt = conn.prepareStatement(sql);
+    ```
+- **JPA:** High-level abstraction (uses JDBC internally)
+    ```java
+    userRepository.save(user); // JPA generates SQL
+    ```
+
+--------------------------------------------------
+3. Persistence Caching
+--------------------------------------------------
+- **L1 Cache (First Level):**
+    - Scope: Per EntityManager/Session
+    - Automatic: Always enabled
+    - Life: Transaction duration
+    ```java
+    @Transactional
+    public void demo() {
+        User u1 = repo.findById(1L); // DB call
+        User u2 = repo.findById(1L); // L1 cache - NO DB
+    }
+    ```
+- **L2 Cache (Second Level):**
+    - Scope: Application-wide
+    - Optional: Needs configuration (EhCache, etc.)
+    - Cross-session caching
+
+--------------------------------------------------
+4. @Transactional - Crucial for READS
+--------------------------------------------------
+- **Common Myth:** Only for writes
+- **Reality:** Needed for:
+    - L1 Caching
+    - Lazy Loading
+    - Read consistency
+    
+    ```java
+    // WITHOUT @Transactional - PROBLEMS!
+    User user = repo.findById(1L); 
+    user.getOrders(); // ❌ LazyInitializationException
+
+    // WITH @Transactional - WORKS!
+    @Transactional
+    public User getUser(Long id) {
+        User user = repo.findById(1L);
+        user.getOrders(); // ✅ Works - session active
+        return user;
+    }
+    ```
+
+--------------------------------------------------
+5. Lazy Loading & Performance
+--------------------------------------------------
+- **What is it?**
+    - Load relationships only when accessed
+    - Opposite of Eager loading
+    
+    ```java
+    @Entity
+    public class User {
+        @OneToMany(fetch = FetchType.LAZY) // ← LAZY
+        private List<Order> orders; // Not loaded immediately
+    }
+    // Usage
+    User user = repo.findById(1L); // Orders NOT loaded
+    user.getOrders().size(); // ← NOW orders loaded from DB
+    ```
+- **Performance Benefits:**
+    - Faster initial queries (no unnecessary JOINs)
+    - Less memory usage (don't load unused data)
+    - Reduced network traffic
+
+--------------------------------------------------
+6. Key Configuration Example
+--------------------------------------------------
+```java
+@Transactional
+public void processOrder() {
+    User user = userRepo.findById(1L); // Session active
+    user.getOrders().size(); // ✅ Lazy loading works
+    orderRepo.save(new Order()); // ✅ Transactional write
+} // Auto-commit here, session closes
+```
+
+--------------------------------------------------
+7. Quick Interview Cheatsheet
+--------------------------------------------------
+**Q: Why JPA?**
+> Solves object-relational mismatch, reduces boilerplate SQL, provides caching, lazy loading, and database portability.
+
+**Q: JDBC vs JPA?**
+> JDBC is low-level API for database connections, JPA is higher-level ORM that uses JDBC internally but provides object mapping.
+
+**Q: What is Lazy Loading?**
+> Delays loading of related entities until accessed, improves performance by avoiding unnecessary queries.
+
+**Q: Why @Transactional on GET methods?**
+> Enables L1 caching, allows lazy loading to work, and maintains session for related entity access.
+
+**Q: What are JPA cache levels?**
+> L1 cache (session-level, automatic) and L2 cache (application-level, needs configuration).
+
+--------------------------------------------------
+8. Sequence Diagram - Typical Flow
+--------------------------------------------------
+
+Client → Service Layer → Repository → JPA → Database
+    ↓        ↓              ↓         ↓       ↓
+    → @Transactional → findById() → Check L1 →
+        ↓              ↓         ↓       ↓
+    ← Maintain ← Return ← If not in ← Query ←
+    Session   Entity   cache     DB
+        ↓        ↓         ↓       ↓
+    ← Lazy Loading Works → ← Cached for next call →
+
+--------------------------------------------------
+9. Lazy Loading & @Transactional FAQ
+--------------------------------------------------
+- **Does lazy loading work with @Transactional only?**
+    - Lazy Loading works ONLY with Active Session
+    - @Transactional creates the active session
+
+
+--------------------------------------------------
+10. JPA Query Phases: I/O vs CPU
+--------------------------------------------------
+- **When you run a DB query through JPA, two main phases happen:**
+    - **I/O phase (DB call):**
+        - JDBC driver sends SQL to DB, waits for the network + DB to return results.
+        - That’s the “waiting” or I/O part (e.g., 180 ms).
+    - **CPU phase (processing results):**
+        - Once data arrives from the DB, JPA/Hibernate still has work to do inside the JVM before you get your List<Entity> or Page<Entity>.
+        - That’s the 20 ms CPU part.
+
+--------------------------------------------------
+11. What JPA (Hibernate) Does in CPU Phase
+--------------------------------------------------
+**Step-by-step after result set comes back:**
+1. JDBC result processing
+    - JDBC driver streams rows from the ResultSet.
+    - Each column value is converted from DB type → Java type (e.g., VARCHAR → String, INT → Integer).
+2. Entity instantiation
+    - Hibernate creates new instances of your entity classes.
+    - Example: if you queried 100 User rows, it runs something like:
+        ```java
+        new User(id, name, email, ...)
+        ```
+    - Uses reflection or bytecode-enhanced proxies (adds CPU overhead).
+3. Mapping column values → entity fields
+    - Matches column names/aliases to entity fields based on mapping annotations (@Column, @JoinColumn, etc.)
+    - Sets each field using reflection or generated setters.
+4. Second-level cache & persistence context bookkeeping
+    - Checks if an entity with the same ID is already in the persistence context (first-level cache).
+    - If yes, reuses that instance (identity guarantee).
+    - If no, adds the new entity to the context.
+    - May trigger lazy-loading proxies or mark relationships for later fetch.
+5. Collection or relationship resolution
+    - If your entity has @OneToMany or @ManyToOne, Hibernate sets up proxy objects or initializes relationships depending on the fetch type.
+6. Return to your code
+    - After all that, you get a fully constructed list of Java entities — now pure Java objects detached from JDBC.
+
+**Why is this the “processing” part?**
+> This entire transformation — converting ResultSet → hydrated entities → managed persistence context — is CPU-bound work that happens inside your application process.
+> That’s what is meant by “processing results after data arrives.”

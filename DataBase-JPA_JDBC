@@ -1,0 +1,145 @@
+JPA & Hibernate Interview Notes
+1. Core Concept - Why JPA?
+Problem: Object-Relational Impedance Mismatch
+
+Java: Objects, Inheritance, References
+
+Database: Tables, Rows, Foreign Keys
+
+Solution: JPA bridges this gap
+
+java
+// You work with objects
+@Entity
+public class User {
+    @Id
+    private Long id;
+    @OneToMany
+    private List<Order> orders;
+}
+// JPA handles SQL generation
+2. JDBC vs JPA Relationship
+text
+Your App → JPA → JDBC API → JDBC Driver → Database
+JDBC: Low-level API (manual SQL)
+
+java
+String sql = "INSERT INTO user VALUES (?,?)";
+PreparedStatement stmt = conn.prepareStatement(sql);
+JPA: High-level abstraction (uses JDBC internally)
+
+java
+userRepository.save(user); // JPA generates SQL
+3. Persistence Caching
+L1 Cache (First Level)
+Scope: Per EntityManager/Session
+
+Automatic: Always enabled
+
+Life: Transaction duration
+
+java
+@Transactional
+public void demo() {
+    User u1 = repo.findById(1L); // DB call
+    User u2 = repo.findById(1L); // L1 cache - NO DB
+}
+L2 Cache (Second Level)
+Scope: Application-wide
+
+Optional: Needs configuration (EhCache, etc.)
+
+Cross-session caching
+
+4. @Transactional - Crucial for READS
+Common Myth: Only for writes
+Reality: Needed for:
+
+L1 Caching
+
+Lazy Loading
+
+Read consistency
+
+java
+// WITHOUT @Transactional - PROBLEMS!
+User user = repo.findById(1L); 
+user.getOrders(); // ❌ LazyInitializationException
+
+// WITH @Transactional - WORKS!
+@Transactional
+public User getUser(Long id) {
+    User user = repo.findById(1L);
+    user.getOrders(); // ✅ Works - session active
+    return user;
+}
+5. Lazy Loading & Performance
+What is it?
+Load relationships only when accessed
+
+Opposite of Eager loading
+
+java
+@Entity
+public class User {
+    @OneToMany(fetch = FetchType.LAZY) // ← LAZY
+    private List<Order> orders; // Not loaded immediately
+}
+
+// Usage
+User user = repo.findById(1L); // Orders NOT loaded
+user.getOrders().size(); // ← NOW orders loaded from DB
+Performance Benefits:
+Faster initial queries (no unnecessary JOINs)
+
+Less memory usage (don't load unused data)
+
+Reduced network traffic
+
+6. Key Configuration
+Lazy vs Eager
+java
+@OneToMany(fetch = FetchType.LAZY)  // Better performance
+@ManyToOne(fetch = FetchType.EAGER) // Load with parent
+Transaction Configuration
+java
+@Transactional(readOnly = true) // For read-only operations
+public User findUser(Long id) {
+    return userRepository.findById(id);
+}
+7. Quick Interview Cheatsheet
+Q: Why JPA?
+A: Solves object-relational mismatch, reduces boilerplate SQL, provides caching, lazy loading, and database portability.
+
+Q: JDBC vs JPA?
+A: JDBC is low-level API for database connections, JPA is higher-level ORM that uses JDBC internally but provides object mapping.
+
+Q: What is Lazy Loading?
+A: Delays loading of related entities until accessed, improves performance by avoiding unnecessary queries.
+
+Q: Why @Transactional on GET methods?
+A: Enables L1 caching, allows lazy loading to work, and maintains session for related entity access.
+
+Q: What are JPA cache levels?
+A: L1 cache (session-level, automatic) and L2 cache (application-level, needs configuration).
+
+8. Sequence Diagram - Typical Flowtext
+
+
+Client → Service Layer → Repository → JPA → Database
+    ↓        ↓              ↓         ↓       ↓
+    → @Transactional → findById() → Check L1 →
+        ↓              ↓         ↓       ↓
+    ← Maintain ← Return ← If not in ← Query ←
+    Session   Entity   cache     DB
+        ↓        ↓         ↓       ↓
+    ← Lazy Loading Works → ← Cached for next call →
+
+
+Copy this and review before interview! Good luck! 🚀
+
+does lazy loading work with transaction annotaion only?
+Lazy Loading Works ONLY with Active Session
+@Transactional Creates the Active Session
+Scenario 1: WITH @Transactional - WORKS
+java
