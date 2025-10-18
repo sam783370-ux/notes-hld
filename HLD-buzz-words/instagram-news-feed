@@ -1,0 +1,49 @@
+>Functional Requirement instagram news feed
+
+1)create post
+2)follow unfollow
+3)new feed
+4)like comment
+5)user notification
+
+>Non-functional Requirement
+
+1)Availablility - system should be available 99.999% of time
+2)Eventual consistency - if user post something may not be show up immediately but appears within few seconds
+3)latency - if we click on home button newsfeed should load in 1-2seconds.
+4)scalability - 500 M DAU and 2 B MAU
+5)Extensibility - easier to extend in future like replying to a comment post recommendation or ads.
+6)Usability -
+
+
+>Capacity Estimation
+
+- DAU MAU
+- Throughput
+- Storage
+- Memory
+- Network
+
+
+> why capacity estimation?
+- determine numer fo servers and databases
+- cost management
+- decide type and specification of all hardware.
+- helps us determine if read heavy or write heavy system
+
+
+DAU-500M
+MAU-2B
+
+
+read throughput - 500,000,000 * 100;
+                  50,000,000,000  
+
+
+write throughtput 
+500M * 
+
+1 week -> 500M -> 1
+7days -> 1
+
+1 day-> 1/7*500
