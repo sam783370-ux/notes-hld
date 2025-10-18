@@ -7,7 +7,7 @@ throughput measures how many of those operations can be completed in a unit of t
 
 Throughput is one-way. Latency/Ping/RTT are round-trip.
 
-
+No, throughput and efficiency are not the same, though they are related. Throughput measures the rate at which a system produces output, while efficiency is a measure of how well a system uses its resources to produce that output. 
 
 2. Elaboration & Examples (The "I Can Apply This" Answer)
 Be ready to give examples from different domains:
@@ -49,3 +49,137 @@ Throughput is the actual number of cars passing a point per hour. Even with 4 la
 Latency is the time it takes for one car to travel from point A to point B. A wide, empty highway (high bandwidth) can still be very long (high latency).
 
 So, bandwidth sets the upper limit for how much data can flow, but throughput is what actually flows."
+
+
+
+Throughput / Storage / Object Concepts
+
+Blob vs Object:
+
+Azure → blob (Binary Large OBject)
+
+AWS S3 / GCP bucket → object
+
+Concept: any file (mp4, png, xlsx) stored as single unit.
+
+
+## HLD Buzz Words — Concise Revision Notes
+
+These are short, interview-ready notes for quick revision. Each section has a crisp definition, short examples, and 2–3 takeaways you can say in an interview.
+
+---
+
+## Throughput vs Latency (quick primer)
+
+- Throughput = number of operations completed per unit time (TPS, IOPS, Mbps).
+- Latency = time for a single operation to complete (often measured round-trip for networks).
+- They are related but different:
+    - Under light load they can be independent.
+    - Under heavy load, pushing throughput leads to queuing which increases latency (non-linear spike near saturation).
+
+Highway analogy:
+    - Bandwidth = number of lanes (capacity).
+    - Throughput = actual cars passing a point per hour.
+    - Latency = time for one car to travel from A to B.
+
+Practical interview points:
+    - Measure with load tests (k6, JMeter, wrk); track throughput and latency percentiles (p50/p95/p99).
+    - Improve throughput by reducing contention, caching, batching, and using faster I/O.
+```java
+@Document("users")
+public class User {
+        @Id private String id;
+        private String name;
+}
+
+public interface UserRepository extends MongoRepository<User, String> {
+        List<User> findByName(String name);
+}
+```
+
+Interview-ready crisp points:
+    - "Embed when data is read together; reference when reused or large." 
+    - "NoSQL favors read patterns and scale; SQL favors strong transactional guarantees." 
+
+---
+
+## Horizontal Scaling (quick notes)
+
+- SQL: vertical scaling easy (bigger machines). Horizontal scaling requires manual sharding and brings challenges (cross-shard joins, distributed transactions, rebalancing).
+- NoSQL: typically built for horizontal scaling (auto-sharding, replication). Choose a good partition key.
+
+Takeaway:
+    - "Scaling decisions often start from read/write patterns and data access locality."
+
+---
+
+## ACID (single-node SQL) — short table
+
+- Atomicity: all-or-nothing (transfer both debit and credit succeed or none)
+- Consistency: constraints always preserved (e.g., balance >= 0)
+- Isolation: concurrent transactions don't see partial updates
+- Durability: committed data survives crashes (WAL, commit logs)
+
+
+---
+
+## CAP theorem (distributed systems)
+
+- C = Consistency (all nodes see the same data)
+- A = Availability (every request receives a response)
+- P = Partition tolerance (the system copes with network splits)
+- You can’t fully guarantee all three in a partitioned system; pick two based on requirements.
+
+Practical mapping:
+    - SQL single-node: CA + ACID
+    - MongoDB: CP (single-document ACID)
+    - Cassandra: AP (eventual consistency)
+
+---
+
+## Transactions: single vs multi-document
+
+- Single-document: fast and ACID in most document stores.
+- Multi-document: more expensive; often handled via application-level compensation or events for eventual consistency.
+
+Interview tip:
+    - "If you need cross-document ACID regularly, consider a relational DB or design to minimize multi-document transactions." 
+
+---
+
+## Interview Q&A Shortcuts
+
+- Why NoSQL relaxes ACID? — To achieve horizontal scale and availability across partitions.
+- Can SQL scale horizontally? — Yes, but requires sharding and distributed transaction handling.
+- How to handle joins in NoSQL? — Embed frequently-read-together data or use references and combine in application logic.
+
+---
+
+## Quick Mental Models (one-liners)
+
+- SQL: ACID — strong guarantees within one node; joins are cheap.
+- NoSQL: CAP trade-offs — automatic sharding; embed to avoid cross-node joins.
+
+---
+
+Keep this file as your quick revision sheet — say any section you want expanded into examples, diagrams, or code samples and I’ll add them.
+
+
+
+Visualizing the Flow
+Client -> API Gateway -> (DNS: api-internal.myservice.com) -> Active Load Balancer -> Servers
+
+ "The two system of load balancer self-manages. The load balancers have a built-in protocol to automatically elect a leader, so no external entity needs to decide who answers."
+
+Anticipated Cross-Questions
+Cross-Question 1: "Why use two load balancers behind an API Gateway?"
+Your Answer: "For high availability. If one load balancer fails, the other takes over instantly, preventing a single point of failure for the entire service behind the gateway."
+
+Cross-Question 2: "What's the difference between this and the API Gateway doing load balancing itself?"
+Your Answer: "Separation of concerns. The API Gateway handles API-specific tasks like authentication, rate limiting, and routing. The dedicated load balancers handle the lower-level, high-volume traffic distribution, connection pooling, and health checks. This is more scalable and robust."
+
+Cross-Question 3: "How does the failover work?"
+Your Answer: "The two load balancers use a heartbeat mechanism. The standby constantly monitors the active one. If the active fails, the standby automatically claims the Virtual IP (VIP), and traffic seamlessly flows to it without the API Gateway needing to change its configuration."
+
+Your final one-liner: "In short, the API Gateway sees a single endpoint, and the load balancer pair manages the high availability behind that endpoint."
+

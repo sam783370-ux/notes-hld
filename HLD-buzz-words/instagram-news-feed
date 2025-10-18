@@ -32,6 +32,8 @@
 - helps us determine if read heavy or write heavy system
 
 
+> thoroughput
+
 DAU-500M
 MAU-2B
 
@@ -47,3 +49,33 @@ write throughtput
 7days -> 1
 
 1 day-> 1/7*500
+
+
+
+>storage
+
+500M - 
+
+1 week - 1 follow
+7days - 1
+1 day - 1/7 single user
+(1/7)*(500M)*365*10
+
+>Memory
+
+Cache memory
+amount of cache memory 1% of daily storage
+
+>Network bandwidth
+
+
+Ingress data incoming into our system per second
+Daily storage in a 216 tb
+
+216/(24*60*60) - 2.5 gb /s
+
+
+Egress Calculation-
+    read request 50b/day
+
+    sum(number of post of respective content type*(proportion))*50b/24*60*60
