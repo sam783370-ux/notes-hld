@@ -1,0 +1,149 @@
+What is a Rate Limiter?
+
+A rate limiter controls how many requests a client can make within a specific timeframe. It acts like a
+traffic controller for your API - allowing, for example, 100 requests per minute from a user, then 
+rejecting excess requests with an HTTP 429 "Too Many Requests" response. Rate limiters prevent abuse,
+protect your servers from being overwhelmed by bursts of traffic, and ensure fair usage across all users.
+
+
+throlling either slows down or adds the req in queues rather than rejecting the requests.
+rate limit rejects.
+
+Rate limiting protects infrastructure, 
+throttling manages user experience. We often layer both - throttle near limits, then hard cap
+when exhausted.
+
+burst limit defines how many requests can be sent in a short spike before throttling starts
+
+
+client side vs server side rate limit 
+
+client side why would they limit themselves
+most sceanrio its the server side rate limit
+
+rate limiter can be implemented in 
+user facing
+internal system
+intra microservices communication
+
+
+Functional requirements:
+   Core Requirements
+The system should identify clients by user ID, IP address, or API key to apply appropriate limits.
+The system should limit HTTP requests based on configurable rules (e.g., 100 API requests per minute per user).
+When limits are exceeded, the system should reject requests with HTTP 429 and include helpful headers (rate limit remaining, reset time).
+
+
+
+
+Non-functional Requirements:
+
+Basics to be known before:
+CAP Theorem & Your Design Choice
+Available > Consistent means:
+
+System stays up even during network partitions
+
+But might return stale data
+
+Example: DNS, CDN caches
+
+If reversed (Consistent > Available):
+
+System refuses requests if it can't guarantee fresh data
+
+Might go down during network issues to avoid inconsistency
+
+Example: Financial transaction systems
+
+When I say "system refuses requests" in Consistent mode, it means:
+
+What Happens:
+Reads/Writes are blocked temporarily
+Existing data remains intact and safe
+
+
+
+System says: "I can't serve you right now because I can't verify I have the latest version"
+
+
+We prioritize availability because a rate limiter's failure should
+not cascade to total system outage. Better to allow some excess traffic
+than block all legitimate users during network partitions
+
+# Choice during network failure:
+ALLOW_SOME_EXCESS_TRAFFIC  # Available → Site stays up
+VS
+BLOCK_ALL_LEGITIMATE_USERS # Consistent → Site goes down
+
+
+# 3-node database cluster in different data centers
+US-East    EU-West    Asia-Pacific
+   ↑          ↑           ↑
+# Network cable cut between US and EU
+# Now: US nodes can't talk to EU/Asia nodes
+# But all nodes are still running locally!
+
+# CAP Decision Point:
+# Continue serving requests inconsistently? (Choose A)
+# Or stop serving to maintain consistency? (Choose C)
+
+Common Misconceptions
+❌ "Partition = Sharding" → No, sharding is intentional design
+❌ "Partition = Permanent split" → No, partitions are temporary network failures
+❌ "Partition = Single node failure" → No, it's about communication breakdown between groups
+
+SDE-3 Insight
+"Partitions are the test scenario that forces the C vs A tradeoff. You're not choosing C or A for normal 
+operation - you're choosing what happens when the network unexpectedly splits your 
+system."
+
+So when we say "we prefer Available over Consistent," we're saying: "When network
+ partitions happen, we'll keep serving requests rather than going read-only to 
+ maintain perfect consistency."
+
+Capacity Estimation
+
+100m dau
+1m rps
+
+
+Fixed window issue:
+In a fixed window rate limiting strategy (e.g., per minute), all requests within the
+same time bucket are counted together.
+This causes a burst problem at boundary edges — e.g., a user can send max requests 
+at the end of one window and again at the start of the next, effectively doubling allowed 
+traffic momentarily.
+
+
+"Boundary effects are dangerous because:
+
+They violate the intent - We wanted ~1.6 requests/second, not 100 requests instantly
+
+They create predictable attacks - Malicious users can time bursts to maximize damage
+
+They cause resource spikes - Databases, APIs, and downstream services see sudden load surges that can cause cascading failures"
+
+| Feature            | Fixed Window                                                | Rolling/Sliding Window                                               |
+| ------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| **Definition**     | Count requests in a fixed bucket (e.g. per minute).         | Count requests in the *past N seconds/minutes* dynamically.          |
+| **How it works**   | Counter resets at every window boundary.                    | For each request, count all requests within the last N seconds.      |
+| **Problem**        | Burst at window edges (e.g., right before and after reset). | Smooth traffic; no burst since counts slide continuously.            |
+| **Implementation** | Simple counter (e.g., Redis INCR + EXPIRE).                 | Maintain queue/timestamps; remove expired entries or use sorted set. |
+| **Use case**       | Simple, low-precision throttling.                           | Fairer, production-grade rate limiting.                              |
+
+
+
+“In the sliding-window log algorithm, we maintain a timestamp queue per user to track recent requests within the look-back window.
+This ensures precise fairness but introduces high memory and cleanup overhead — each active user needs their own queue or sorted set, which can hold dozens of timestamps.
+At scale (millions of users), that becomes expensive in both memory and CPU due to frequent insertions, expirations, and scans.
+That’s why large systems usually approximate it with a sliding counter, token bucket, or leaky bucket — they trade a bit of precision for huge efficiency gains
+
+
+| ❓Question                        | 💬 Ideal Crisp Answer                                                         |
+| -------------------------------- | ----------------------------------------------------------------------------- |
+| Why maintain per-user queues?    | Because rate limits are typically per user/client — each needs isolation.     |
+| What’s the complexity?           | O(1) amortized insert + O(k) cleanup (k = old timestamps to expire).          |
+| How to optimize?                 | Use Redis sorted sets with TTLs or approximate counters (e.g., token bucket). |
+| Why prefer token bucket in prod? | Constant space, O(1) ops, and allows controlled bursts.                       |
+| Can we batch cleanup?            | Yes — periodic pruning or lazy deletion on access reduces cost.               |

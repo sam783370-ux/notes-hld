@@ -73,6 +73,10 @@ These are short, interview-ready notes for quick revision. Each section has a cr
 
 - Throughput = number of operations completed per unit time (TPS, IOPS, Mbps).
 - Latency = time for a single operation to complete (often measured round-trip for networks).
+
+-eg: -Number of data packets arrived within one second
+     -Time consumed for transfer of one packet data   
+
 - They are related but different:
     - Under light load they can be independent.
     - Under heavy load, pushing throughput leads to queuing which increases latency (non-linear spike near saturation).
@@ -182,4 +186,41 @@ Cross-Question 3: "How does the failover work?"
 Your Answer: "The two load balancers use a heartbeat mechanism. The standby constantly monitors the active one. If the active fails, the standby automatically claims the Virtual IP (VIP), and traffic seamlessly flows to it without the API Gateway needing to change its configuration."
 
 Your final one-liner: "In short, the API Gateway sees a single endpoint, and the load balancer pair manages the high availability behind that endpoint."
+
+
+Burst limit → short-term allowance (how big a spike you can make)
+
+Throttling (rate limit) → long-term average speed limit
+
+
+Throttling limits overall request rate;
+API throttling is the process of limiting the number of API requests a user can make in a certain period
+
+ Throttling is exactly like your telecom provider saying: "You used your premium quota, but we won't cut you off completely - we'll just make the service painfully slow so you can still do basic things if you're patient
+
+ Rate limiting protects infrastructure, throttling manages user experience. We often layer both - throttle near limits, then hard cap when exhausted.
+
+ burst limit defines how many requests can be sent in a short spike before throttling starts
+
+429 too many request
+
+
+What is a Service Directory / Discovery?
+
+It’s a central registry that keeps track of all active microservices, their network locations (IP, port, instance count), and health status — so the API Gateway (and other services) can find them dynamically.
+
+Why it exists
+
+In a microservices world:
+
+Services run on many instances (autoscaling, containers, etc.)
+
+IPs change frequently (dynamic infra)
+
+Hardcoding hostnames in the gateway would break often
+
+👉 So, instead of static configs, we use a service registry.
+
+https://www.youtube.com/watch?v=dkgxvnk8cWw
+
 
